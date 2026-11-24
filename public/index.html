@@ -1,1 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FigSom</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#111; --muted:#666; --accent:#128c7e; --on:#fff; --border:#e2e4e8; --err:#c62828; --ok:#1b7f3b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1114; --card:#171b20; --text:#eee; --muted:#9aa3ad; --accent:#25d366; --on:#06210f; --border:#2a3038; --err:#ef5350; --ok:#4caf50; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; margin:8px 0 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
+  input, select { width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font:inherit; }
+  button { width:100%; margin-top:16px; padding:14px; border:0; border-radius:10px; background:var(--accent); color:var(--on); font:inherit; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.link { background:none; color:var(--muted); font-weight:500; margin-top:8px; padding:6px; text-decoration:underline; }
+  .muted { color:var(--muted); font-size:14px; }
+  .center { text-align:center; }
+  .qr { width:260px; max-width:100%; border-radius:8px; background:#fff; }
+  .msg { margin-top:12px; font-weight:600; }
+  .err { color:var(--err); } .ok { color:var(--ok); }
+  .hidden { display:none; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; background:var(--muted); }
+  .dot.on { background:var(--ok); }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔊 FigSom</h1>
 
+  <section class="card" id="connect">
+    <div id="status" class="muted">Carregando…</div>
+    <div id="qrbox" class="center hidden">
+      <p>No celular: <b>WhatsApp → Aparelhos conectados → Conectar um aparelho</b> e leia o código.</p>
+      <img id="qr" class="qr" alt="QR code">
+      <details style="margin-top:14px;text-align:left">
+        <summary><b>Estou no celular</b> (não consigo ler o QR)</summary>
+        <label for="pairphone">Seu número do WhatsApp (país + DDD)</label>
+        <input type="tel" id="pairphone" placeholder="5511999999999" inputmode="numeric">
+        <button id="pairbtn">Gerar código</button>
+        <div id="paircode" class="msg" style="font-size:28px;letter-spacing:3px;text-align:center"></div>
+        <p class="muted">No WhatsApp: <b>Aparelhos conectados → Conectar um aparelho → Conectar com número de telefone</b> e digite o código.</p>
+      </details>
+    </div>
+    <button class="link hidden" id="logout">Desconectar WhatsApp</button>
+  </section>
+
+  <section class="card hidden" id="form">
+    <label for="video">Vídeo da galeria (com som)</label>
+    <input type="file" id="video" accept="video/*">
+
+    <label for="url">…ou link do TikTok</label>
+    <input type="url" id="url" placeholder="https://vm.tiktok.com/..." inputmode="url">
+
+    <label for="dest">Enviar para</label>
+    <select id="dest">
+      <option value="me">Meu próprio número (chat “Você”)</option>
+      <option value="other">Outro número</option>
+    </select>
+    <input type="tel" id="phone" class="hidden" placeholder="5511999999999" inputmode="numeric" style="margin-top:8px">
+
+    <button id="send">Criar e enviar figurinha</button>
+    <div class="msg" id="result"></div>
+    <p class="muted" id="note"></p>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id)
+let state = null
+
+async function refresh() {
+  try {
+    const s = await (await fetch('/api/status')).json()
+    state = s.state
+    const st = $('status')
+    $('qrbox').classList.toggle('hidden', s.state !== 'qr')
+    $('form').classList.toggle('hidden', s.state !== 'open')
+    $('logout').classList.toggle('hidden', s.state !== 'open')
+    if (s.state === 'open') st.innerHTML = '<span class="dot on"></span>Conectado como +' + s.me
+    else if (s.state === 'qr') st.innerHTML = '<span class="dot"></span>Aguardando você ler o QR code'
+    else st.innerHTML = '<span class="dot"></span>Conectando…'
+    if (s.qr) $('qr').src = s.qr
+    $('note').textContent = s.supportsAudioSticker ? '' :
+      'Esta versão do Baileys ainda não suporta figurinha com som: o painel envia figurinha + áudio separados.'
+  } catch (e) { $('status').textContent = 'Sem conexão com o servidor' }
+}
+setInterval(refresh, 3000); refresh()
+
+$('pairbtn').onclick = async () => {
+  const box = $('paircode')
+  box.className = 'msg'; box.style.fontSize = '16px'; box.textContent = '⏳ Gerando…'
+  try {
+    const r = await fetch('/api/pair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: $('pairphone').value }),
+    })
+    const j = await r.json()
+    if (!r.ok) throw new Error(j.error || 'Erro')
+    box.style.fontSize = '28px'
+    box.textContent = j.code.replace(/(.{4})(.{4})/, '$1-$2')
+  } catch (e) {
+    box.classList.add('err'); box.textContent = '❌ ' + e.message
+  }
+}
+
+$('dest').onchange = () => $('phone').classList.toggle('hidden', $('dest').value !== 'other')
+
+$('logout').onclick = async () => {
+  if (confirm('Desconectar o WhatsApp deste painel?')) { await fetch('/api/logout', { method: 'POST' }); refresh() }
+}
+
+$('send').onclick = async () => {
+  const file = $('video').files[0]
+  const url = $('url').value.trim()
+  const out = $('result')
+  out.className = 'msg'
+  if (!file && !url) { out.textContent = 'Escolha um vídeo ou cole um link.'; out.classList.add('err'); return }
+
+  const fd = new FormData()
+  if (file) fd.append('video', file)
+  else fd.append('url', url)
+  fd.append('to', $('dest').value === 'me' ? 'me' : $('phone').value)
+
+  $('send').disabled = true
+  out.textContent = file ? '⏳ Enviando vídeo e criando figurinha…' : '⏳ Baixando e criando figurinha…'
+  try {
+    const r = await fetch('/api/send', { method: 'POST', body: fd })
+    const j = await r.json()
+    if (!r.ok) throw new Error(j.error || 'Erro')
+    const extra = { 'audio-sticker': '', 'sticker+audio': ' (figurinha + áudio separados)', 'sticker-only': ' (vídeo sem som: figurinha comum)' }[j.mode] || ''
+    out.textContent = '✅ Enviado!' + extra + (j.trimmed ? ' Usei só os primeiros 10s.' : '')
+    out.classList.add('ok')
+  } catch (e) {
+    out.textContent = '❌ ' + e.message
+    out.classList.add('err')
+  } finally { $('send').disabled = false }
+}
+</script>
+</body>
+</html>
