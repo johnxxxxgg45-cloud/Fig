@@ -1,0 +1,20 @@
+{
+  "name": "figsom-web",
+  "version": "1.0.0",
+  "description": "Painel web + bot de WhatsApp para criar figurinhas com som (vídeo da galeria ou TikTok)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "pino": "^9.0.0",
+    "qrcode": "^1.5.4"
+  }
+}

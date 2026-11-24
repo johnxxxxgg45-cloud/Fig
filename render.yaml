@@ -1,0 +1,10 @@
+# Blueprint do Render (plano grátis, sem disco persistente)
+services:
+  - type: web
+    name: figsom
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PANEL_PASSWORD
+        sync: false # o Render pergunta o valor ao criar o serviço
